@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChargeGo — 智能充电桩调度计费系统</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.4.4/dist/index.css" />
+  <style>
+    :root { --green: #43b02a; --green-dark: #2f8f22; --green-soft: #eef8ec; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #1f2933; background: #f4f6f8; font-family: Arial, "Microsoft YaHei", sans-serif; }
+    [v-cloak] { display: none; }
+
+    /* 登录页 */
+    .login-wrap {
+      min-height: 100vh; display: grid; place-items: center; padding: 24px;
+      background: linear-gradient(135deg, #0f2027 0%, #1a3a2a 30%, #2d5a27 60%, #1a3a2a 90%, #0f2027 100%);
+      position: relative; overflow: hidden;
+    }
+    /* 背景装饰圆 */
+    .login-wrap::before {
+      content: ''; position: absolute; top: -120px; right: -80px;
+      width: 400px; height: 400px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(67,176,42,.15) 0%, transparent 70%);
+    }
+    .login-wrap::after {
+      content: ''; position: absolute; bottom: -100px; left: -60px;
+      width: 350px; height: 350px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(67,176,42,.1) 0%, transparent 70%);
+    }
+    .login-box { width: min(420px, 100%); background: rgba(255,255,255,.95); border-radius: 16px; padding: 36px 28px; box-shadow: 0 12px 60px rgba(0,0,0,.3); position: relative; z-index: 1; backdrop-filter: blur(10px); }
+    .login-box .brand { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 24px; text-align: center; }
+    .login-box .brand .logo { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, #43b02a, #2f8f22); display: grid; place-items: center; box-shadow: 0 4px 16px rgba(67,176,42,.4); }
+.login-box .brand .logo svg { width: 32px; height: 32px; }
+    .login-box .brand h1 { margin: 0; font-size: 24px; }
+    .login-box .brand p { margin: 2px 0 0; color: #6b7280; font-size: 13px; }
+
+    /* 顶栏 */
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 22px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+    .topbar .brand { display: flex; align-items: center; gap: 10px; }
+    .topbar .brand .logo-sm { width: 32px; height: 32px; border-radius: 8px; background: var(--green); display: grid; place-items: center; }
+.topbar .brand .logo-sm svg { width: 18px; height: 18px; }
+    .topbar .brand h1 { margin: 0; font-size: 17px; }
+    .topbar .brand p { margin: 2px 0 0; color: #6b7280; font-size: 11px; }
+    .topbar .userbar { display: flex; align-items: center; gap: 8px; }
+
+    /* 主体 */
+    .main { width: min(1480px, calc(100% - 36px)); margin: 14px auto 28px; }
+    .card { background: #fff; border-radius: 10px; padding: 18px; border: 1px solid #e5e7eb; }
+    .card-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+    .card-hd h2 { margin: 0; font-size: 16px; }
+
+    /* 双栏 */
+    .cols2 { display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 18px; }
+    .col-l { padding-right: 16px; border-right: 1px solid #e5e7eb; }
+    .col-r h3 { margin: 0 0 10px; font-size: 14px; }
+
+    /* 充电桩 */
+    .pile-grid { display: grid; gap: 10px; }
+    .pile-item { display: grid; grid-template-columns: 150px 1fr 280px auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .pile-item .pn { font-size: 19px; font-weight: 700; }
+    .pile-item .pi { color: #6b7280; font-size: 12px; }
+    .pile-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .pile-metrics .m { padding: 8px 6px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; text-align: center; }
+    .pile-metrics .m .v { font-size: 15px; font-weight: 700; }
+    .pile-metrics .m .l { font-size: 11px; color: #6b7280; }
+    .pile-now { font-size: 12px; }
+    .pile-now .car { font-weight: 700; }
+
+    /* 队列 */
+    .q-grid { display: grid; gap: 10px; }
+    .q-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+    .q-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .q-head strong { font-size: 16px; }
+    .v-row { display: grid; grid-template-columns: 80px 1fr 280px; gap: 10px; align-items: center; padding: 7px 8px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; margin-bottom: 4px; }
+    .v-row .vi { font-size: 12px; }
+    .v-row .vi strong { font-size: 13px; }
+
+    /* 等候区 */
+    .w-grid { display: grid; gap: 10px; }
+    .w-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+    .w-block h3 { margin: 0 0 8px; font-size: 14px; }
+
+    /* 通用 */
+    .empty-tip { padding: 8px 10px; color: #6b7280; font-size: 12px; border: 1px dashed #e5e7eb; border-radius: 6px; background: #f8fafc; }
+    /* 自定义进度条 */
+    .prog-bar { width: 100%; height: 8px; border-radius: 4px; background: #e5e7eb; overflow: hidden; position: relative; }
+    .prog-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; min-width: 2px; }
+    .prog-bar-fill.charge { background: #43b02a; }
+    .prog-bar-fill.queue { background: #94a3b8; }
+    .prog-bar-fill.wait { background: #e5e7eb; }
+    .prog-info { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+    /* 数据表格 */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table thead th { padding: 10px 12px; text-align: left; font-weight: 600; color: #374151; background: #f8fafc; border-bottom: 2px solid #e5e7eb; white-space: nowrap; }
+    .data-table tbody td { padding: 10px 12px; border-bottom: 1px solid #f1f3f5; color: #4b5563; }
+    .data-table tbody tr { cursor: pointer; transition: background 0.15s; }
+    .data-table tbody tr:hover { background: #f0fdf4; }
+    .data-table .col-r { text-align: right; }
+    .data-table .col-c { text-align: center; }
+    .data-table .fee { font-weight: 700; color: #43b02a; }
+    .data-table .empty-row td { text-align: center; padding: 32px; color: #9ca3af; cursor: default; }
+    .data-table .empty-row:hover { background: transparent; }
+    .chart { width: 100%; height: 300px; margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .row-btns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .cfg-form { max-width: 400px; margin-bottom: 14px; }
+
+    @media (max-width: 1000px) {
+      .cols2 { grid-template-columns: 1fr; }
+      .col-l { padding-right: 0; border-right: 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; }
+      .pile-item { grid-template-columns: 1fr; }
+      .pile-metrics { grid-template-columns: repeat(2, 1fr); }
+      .v-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" v-cloak>
+    <!-- ═══ 登录/注册 ═══ -->
+    <div v-if="!token" class="login-wrap">
+      <div class="login-box">
+        <div class="brand">
+          <span class="logo"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0.5, 1)"><rect x="1" y="2" width="21" height="19" rx="4" fill="#fff" opacity=".15"/><rect x="4" y="5" width="15" height="6" rx="2" fill="#fff" opacity=".3"/><path d="M13.5 12.5l-4 5.5h3l-1 4 4-5.5h-3l1-4z" fill="#fff"/></g></svg></span>
+          <div><h1>ChargeGo</h1><p>智能充电运营平台</p></div>
+        </div>
+        <el-tabs v-model="authTab" stretch>
+          <el-tab-pane label="登录" name="login">
+            <el-form label-position="top">
+              <el-form-item label="用户名"><el-input v-model="loginForm.username" /></el-form-item>
+              <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password /></el-form-item>
+              <el-button type="primary" style="width:100%" @click="doLogin">登录</el-button>
+            </el-form>
+          </el-tab-pane>
+          <el-tab-pane label="没有账号？点击注册" name="register">
+            <el-form label-position="top">
+              <el-form-item label="车牌号"><el-input v-model="regForm.car_id" placeholder="如: 京A12345" /></el-form-item>
+              <el-form-item label="用户名"><el-input v-model="regForm.username" /></el-form-item>
+              <el-form-item label="密码"><el-input v-model="regForm.password" type="password" show-password /></el-form-item>
+              <el-form-item label="昵称"><el-input v-model="regForm.nickname" placeholder="选填" /></el-form-item>
+              <el-form-item label="电池容量[kWh]"><el-input-number v-model="regForm.battery_capacity" :min="1" :precision="1" style="width:100%" /></el-form-item>
+              <el-button type="primary" style="width:100%" @click="doRegister">注册并登录</el-button>
+            </el-form>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </div>
+
+    <!-- ═══ 主界面 ═══ -->
+    <div v-if="token">
+      <header class="topbar">
+        <div class="brand">
+          <span class="logo-sm"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0.5, 1)"><rect x="1" y="2" width="21" height="19" rx="4" fill="#fff" opacity=".15"/><rect x="4" y="5" width="15" height="6" rx="2" fill="#fff" opacity=".3"/><path d="M13.5 12.5l-4 5.5h3l-1 4 4-5.5h-3l1-4z" fill="#fff"/></g></svg></span>
+          <div><h1>ChargeGo</h1><p>{{ user.role === 'admin' ? '运营管理中心' : '车辆充电中心' }}</p></div>
+        </div>
+        <div class="userbar">
+          <el-tag :type="user.role === 'admin' ? 'danger' : 'success'" size="small">{{ user.role === 'admin' ? '管理员' : '用户' }}</el-tag>
+          <span style="font-size:13px">{{ user.nickname || user.username }}</span>
+          <el-button size="small" @click="doLogout">退出</el-button>
+        </div>
+      </header>
+
+      <!-- ═══ 主界面路由 ═══ -->
+      <main class="main" v-if="currentPage === 'main'">
+
+        <!-- ═══ 用户端 ═══ -->
+        <div v-if="user.role === 'user'">
+          <el-tabs v-model="userTab" @tab-change="refreshUserTab">
+            <!-- 充电请求 -->
+            <el-tab-pane label="充电请求" name="req">
+              <div class="card">
+                <div class="card-hd"><h2>充电请求</h2><el-button size="small" @click="refreshUserTab">刷新</el-button></div>
+                <div class="cols2">
+                  <div class="col-l">
+                    <el-form label-position="top">
+                      <el-form-item label="充电模式">
+                        <el-radio-group v-model="chargeForm.mode">
+                          <el-radio-button label="fast">快充</el-radio-button>
+                          <el-radio-button label="slow">慢充</el-radio-button>
+                        </el-radio-group>
+                      </el-form-item>
+                      <el-form-item label="目标充电量（kWh）">
+                        <el-input-number v-model="chargeForm.requested_energy" :min="1" :precision="1" style="width:100%" />
+                      </el-form-item>
+                      <div class="row-btns">
+                        <el-button type="primary" @click="submitCharge" :disabled="status.active">提交请求</el-button>
+                        <el-button @click="modifyCharge" :disabled="!canModify">修改请求</el-button>
+                      </div>
+                    </el-form>
+                  </div>
+                  <div class="col-r">
+                    <h3>当前状态</h3>
+                    <!-- 活跃请求 -->
+                    <div v-if="status.active" style="display:grid;gap:10px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-weight:700">{{ status.request.queue_number }}</span>
+                        <el-tag :type="tagType(status.request.status)">{{ statusText(status.request.status) }}</el-tag>
+                        <span style="font-size:12px;color:#6b7280">{{ status.request.mode === 'fast' ? '快充' : '慢充' }} · {{ status.request.requested_energy }}kWh · 前车{{ status.front_count }} · {{ status.area || '-' }}</span>
+                      </div>
+                      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                          <span style="font-weight:700;font-size:14px">⚡ 充电进度</span>
+                          <span style="font-weight:800;font-size:20px;color:#43b02a">{{ progressBarWidth }}%</span>
+                        </div>
+                        <div style="height:12px;background:#e5e7eb;border-radius:6px;overflow:hidden">
+                          <div :style="{width:Math.max(progressBarWidth,2)+'%',background:status.request.status==='charging'?'#43b02a':'#94a3b8',height:'100%',borderRadius:'6px',transition:'width 0.3s'}"></div>
+                        </div>
+                        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;color:#6b7280">
+                          <span>已充 {{ liveProgress(status.request).charged_energy }} / {{ status.request.requested_energy }} kWh</span>
+                          <span>预计剩余 {{ liveProgress(status.request).remaining_minutes }} 分钟</span>
+                        </div>
+                      </div>
+                      <div class="row-btns">
+                        <!-- 充电中：暂停 + 结束 -->
+                        <template v-if="status.request.status === 'charging'">
+                          <el-button type="warning" size="small" @click="doPause" plain>暂停充电</el-button>
+                          <el-button type="success" size="small" @click="finishCharge">结束充电</el-button>
+                          <el-button type="danger" size="small" plain @click="cancelCharge">取消请求</el-button>
+                        </template>
+                        <!-- 已暂停：继续 + 结束 -->
+                        <template v-if="status.request.status === 'paused'">
+                          <el-button type="primary" size="small" @click="doResume">▶ 继续充电</el-button>
+                          <el-button type="success" size="small" @click="finishCharge">结束充电</el-button>
+                          <el-button type="danger" size="small" plain @click="cancelCharge">取消请求</el-button>
+                        </template>
+                        <!-- 排队/等候：只能取消 -->
+                        <template v-if="status.request.status === 'waiting' || status.request.status === 'queued' || status.request.status === 'fault_waiting'">
+                          <el-button type="danger" size="small" plain @click="cancelCharge">取消请求</el-button>
+                        </template>
+                      </div>
+                    </div>
+                    <!-- 充电已完成 -->
+                    <div v-if="!status.active && status.request && status.request.status==='completed'" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;text-align:center">
+                      <div style="font-size:28px;margin-bottom:8px">✅</div>
+                      <div style="font-weight:700;font-size:15px;color:#166534;margin-bottom:4px">充电已完成</div>
+                      <div style="font-size:13px;color:#6b7280">{{ progressSummary(status.request) }}</div>
+                    </div>
+                    <!-- 无活跃请求 -->
+                    <div v-if="!status.active && (!status.request || status.request.status!=='completed')" class="empty-tip">暂无进行中的请求，请提交充电申请</div>
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- 排队状态 -->
+            <el-tab-pane label="排队状态" name="queue">
+              <div class="card">
+                <div class="card-hd"><h2>排队详情</h2><el-button size="small" @click="refreshUserTab">刷新</el-button></div>
+                <el-empty v-if="!status.active" description="暂无排队或充电记录" />
+                <el-table v-if="status.active" :data="[status.request]" border>
+                  <el-table-column prop="queue_number" label="排队号" width="100" />
+                  <el-table-column label="模式" width="90"><template #default="{row}">{{ row.mode === 'fast' ? '快充' : '慢充' }}</template></el-table-column>
+                  <el-table-column label="状态" width="120"><template #default="{row}"><el-tag :type="tagType(row.status)">{{ statusText(row.status) }}</el-tag></template></el-table-column>
+                  <el-table-column prop="requested_energy" label="目标(kWh)" width="100" />
+                  <el-table-column label="前车" width="70">{{ status.front_count }}</el-table-column>
+                  <el-table-column label="区域" width="90">{{ status.area || '-' }}</el-table-column>
+                  <el-table-column label="充电进度" min-width="200">
+                    <template #default="{row}">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <div style="flex:1;height:7px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+                          <div :style="{width: (row.status==='charging'?liveProgress(row).percent:row.status==='queued'?8:3)+'%', background: row.status==='charging'?'#43b02a':'#94a3b8', height:'100%', borderRadius:'4px'}"></div>
+                        </div>
+                        <span style="font-weight:600;font-size:12px;white-space:nowrap" :style="{color: row.status==='charging' ? '#43b02a' : '#94a3b8'}">{{ row.status==='charging' ? liveProgress(row).percent+'%' : progressSummary(row) }}</span>
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="分配时间" min-width="150"><template #default="{row}">{{ fmt(row.assign_time) }}</template></el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+
+            <!-- 历史详单 -->
+            <el-tab-pane label="历史详单" name="bills">
+              <div class="card">
+                <div class="card-hd"><h2>充电详单 <span style="font-weight:400;color:#6b7280;font-size:13px">共{{ bills.length }}条</span></h2><el-button size="small" @click="loadBills">刷新</el-button></div>
+                <div v-if="!bills.length" class="empty-tip">暂无充电记录</div>
+                <table v-if="bills.length" class="data-table">
+                  <thead><tr>
+                    <th style="width:55px">账单#</th><th style="width:45px">桩</th>
+                    <th>开始时间</th><th>结束时间</th>
+                    <th class="col-r" style="width:75px">费用</th><th class="col-c" style="width:55px"></th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="b in bills" :key="b.id" @click="goToBillDetail(b)">
+                      <td>{{ b.id }}</td><td>{{ b.pile_id }}</td>
+                      <td>{{ fmt(b.start_time) }}</td><td>{{ fmt(b.stop_time) }}</td>
+                      <td class="fee col-r">¥{{ b.total_fee.toFixed(2) }}</td>
+                      <td class="col-c"><el-button type="primary" link size="small" @click.stop="goToBillDetail(b)">详单</el-button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+
+        <!-- ═══ 管理端 ═══ -->
+        <div v-if="user.role === 'admin'">
+          <el-tabs v-model="adminTab" @tab-change="refreshAdminTab">
+            <!-- 充电桩监控 -->
+            <el-tab-pane label="充电桩监控" name="piles">
+              <div class="card">
+                <div class="card-hd">
+                  <h2>充电桩状态</h2>
+                  <div class="row-btns">
+                    <el-select v-model="faultStrategy" style="width:140px">
+                      <el-option label="时间顺序" value="sequence" />
+                      <el-option label="故障优先" value="priority" />
+                      <el-option label="最短时长" value="shortest" />
+                    </el-select>
+                    <el-button size="small" @click="refreshAdminTab">刷新</el-button>
+                  </div>
+                </div>
+                <div class="pile-grid">
+                  <div v-for="p in piles" :key="p.id" class="pile-item">
+                    <div>
+                      <div class="pn">{{ p.code }}</div>
+                      <div class="pi">{{ p.type === 'fast' ? '快充' : '慢充' }} / {{ p.power }} kWh/h</div>
+                      <el-tag :type="p.is_working ? 'success' : 'danger'" size="small">{{ p.is_working ? '运行中' : '已关闭' }}</el-tag>
+                    </div>
+                    <div class="pile-metrics">
+                      <div class="m"><span class="l">累计次数</span><span class="v">{{ p.charge_count }}</span></div>
+                      <div class="m"><span class="l">累计时长</span><span class="v">{{ p.total_duration }}h</span></div>
+                      <div class="m"><span class="l">累计电量</span><span class="v">{{ p.total_energy }}kWh</span></div>
+                      <div class="m"><span class="l">累计费用</span><span class="v">¥{{ p.total_fee }}</span></div>
+                    </div>
+                    <div class="pile-now">
+                      <div style="font-weight:700;margin-bottom:2px">当前车辆</div>
+                      <div v-if="p.current">
+                        <div class="car">{{ p.current.queue_number }} / {{ p.current.username }}</div>
+                        <div class="prog-bar" style="margin:3px 0"><div class="prog-bar-fill charge" :style="{ width: liveProgress(p.current).percent + '%' }"></div></div><div class="prog-info">{{ progressSummary(p.current) }}</div>
+                      </div>
+                      <span v-if="!p.current" style="color:#6b7280">暂无车辆</span>
+                    </div>
+                    <div style="text-align:right">
+                      <el-button size="small" @click="openPileConfig(p)">配置</el-button>
+                      <el-button v-if="p.is_working" size="small" type="danger" plain @click="stopPile(p)">关闭</el-button>
+                      <el-button v-if="!p.is_working" size="small" type="success" @click="startPile(p)">启动</el-button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- 充电桩配置弹窗 -->
+            <el-dialog v-model="pileConfigVisible" title="充电桩参数配置" width="420px">
+              <el-form v-if="pileConfigTarget" label-position="top">
+                <el-form-item label="充电桩编号"><strong>{{ pileConfigTarget.code }}</strong></el-form-item>
+                <el-form-item label="类型">{{ pileConfigTarget.type === 'fast' ? '快充' : '慢充' }}</el-form-item>
+                <el-form-item label="功率 (kWh/h)">
+                  <el-input-number v-model="pileConfigPower" :min="1" :max="200" :precision="1" style="width:100%" />
+                </el-form-item>
+                <el-form-item label="运行状态">{{ pileConfigTarget.is_working ? '运行中' : '已关闭' }}</el-form-item>
+              </el-form>
+              <template #footer>
+                <el-button @click="pileConfigVisible = false">取消</el-button>
+                <el-button type="primary" @click="savePileConfig">保存配置</el-button>
+              </template>
+            </el-dialog>
+
+            <!-- 队列详情 -->
+            <el-tab-pane label="队列详情" name="queues">
+              <div class="card">
+                <div class="card-hd"><h2>各桩队列</h2><el-button size="small" @click="loadQueues">刷新</el-button></div>
+                <div class="q-grid">
+                  <div v-for="q in queues" :key="q.pile.id" class="q-block">
+                    <div class="q-head">
+                      <div><strong>{{ q.pile.code }}</strong> <span style="color:#6b7280;font-size:12px">{{ q.pile.type === 'fast' ? '快充' : '慢充' }} / {{ q.pile.power }} kWh/h</span></div>
+                      <el-tag :type="q.pile.is_working ? 'success' : 'danger'" size="small">{{ q.pile.is_working ? '正常' : '关闭' }}</el-tag>
+                    </div>
+                    <div v-if="q.current">
+                      <div class="v-row">
+                        <el-tag size="small" type="success">充电中</el-tag>
+                        <div class="vi"><strong>{{ q.current.queue_number }} / {{ q.current.username }}</strong><br/>目标 {{ q.current.requested_energy }}kWh</div>
+                        <div><div class="prog-bar"><div class="prog-bar-fill" :class="q.current.status === 'charging' ? 'charge' : 'queue'" :style="{ width: liveProgress(q.current).percent + '%' }"></div></div><div class="prog-info">{{ progressSummary(q.current) }}</div></div>
+                      </div>
+                    </div>
+                    <div v-for="r in q.queued" :key="r.id" class="v-row">
+                      <el-tag size="small" type="primary">排队中</el-tag>
+                      <div class="vi"><strong>{{ r.queue_number }} / {{ r.username }}</strong><br/>目标 {{ r.requested_energy }}kWh · 等待 {{ r.queue_wait_minutes }}分钟</div>
+                      <div><div class="prog-bar"><div class="prog-bar-fill queue" :style="{ width: '5%' }"></div></div><div class="prog-info">{{ progressSummary(r) }}</div></div>
+                    </div>
+                    <div v-if="!q.current && !q.queued.length" class="empty-tip">暂无车辆</div>
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- 等候区 -->
+            <el-tab-pane label="等候区" name="waiting">
+              <div class="card">
+                <div class="card-hd"><h2>等候区</h2><el-button size="small" @click="loadWaitingArea">刷新</el-button></div>
+                <div class="w-grid">
+                  <div class="w-block">
+                    <h3>等候排队</h3>
+                    <div v-for="r in waitingArea.waiting" :key="'w'+r.id" class="v-row">
+                      <el-tag size="small" type="warning">等候中</el-tag>
+                      <div class="vi"><strong>{{ r.queue_number }} / {{ r.username }}</strong><br/>{{ r.mode === 'fast' ? '快充' : '慢充' }} · 电池 {{ r.battery_capacity }}kWh · 目标 {{ r.requested_energy }}kWh</div>
+                      <div style="font-size:12px;color:#6b7280">等待 {{ r.queue_wait_minutes }} 分钟</div>
+                    </div>
+                    <div v-if="!waitingArea.waiting.length" class="empty-tip">暂无等候车辆</div>
+                  </div>
+                  <div class="w-block">
+                    <h3>故障调度临时队列</h3>
+                    <div v-for="r in waitingArea.fault_waiting" :key="'f'+r.id" class="v-row">
+                      <el-tag size="small" type="danger">故障等待</el-tag>
+                      <div class="vi"><strong>{{ r.queue_number }} / {{ r.username }}</strong><br/>{{ r.mode === 'fast' ? '快充' : '慢充' }} · 电池 {{ r.battery_capacity }}kWh · 目标 {{ r.requested_energy }}kWh</div>
+                      <div style="font-size:12px;color:#6b7280">等待 {{ r.queue_wait_minutes }} 分钟</div>
+                    </div>
+                    <div v-if="!waitingArea.fault_waiting.length" class="empty-tip">暂无故障待调度车辆</div>
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- 统计报表 -->
+            <el-tab-pane label="统计报表" name="reports">
+              <div class="card">
+                <div class="card-hd">
+                  <h2>报表</h2>
+                  <div class="row-btns">
+                    <el-select v-model="reportPeriod" @change="loadReports" style="width:90px">
+                      <el-option label="日" value="day" /><el-option label="周" value="week" /><el-option label="月" value="month" />
+                    </el-select>
+                    <el-button size="small" @click="loadReports">刷新</el-button>
+                  </div>
+                </div>
+                <div id="reportChart" class="chart"></div>
+                <el-table :data="reportRows" border>
+                  <el-table-column prop="time_label" label="时间" width="170" />
+                  <el-table-column prop="pile_code" label="桩编号" width="90" />
+                  <el-table-column prop="charge_count" label="充电次数" width="90" />
+                  <el-table-column prop="total_duration" label="总时长(h)" width="90" />
+                  <el-table-column prop="total_energy" label="总电量(kWh)" width="100" />
+                  <el-table-column prop="electricity_fee" label="电费" width="80" />
+                  <el-table-column prop="service_fee" label="服务费" width="80" />
+                  <el-table-column prop="total_fee" label="总费用" width="90" />
+                </el-table>
+              </div>
+            </el-tab-pane>
+
+            <!-- 用户管理 -->
+            <el-tab-pane label="用户管理" name="users">
+              <div class="card">
+                <div class="card-hd"><h2>用户列表</h2><el-button size="small" @click="loadUsers">刷新</el-button></div>
+                <el-table :data="users" border @row-click="goToUserDetail">
+                  <el-table-column label="角色" width="80"><template #default="{row}"><el-tag :type="row.role==='admin'?'danger':'success'" size="small">{{ row.role==='admin'?'管理员':'用户' }}</el-tag></template></el-table-column>
+                  <el-table-column label="操作" width="65" align="center">
+                    <template #default="{row}"><el-button type="primary" link size="small" @click.stop="goToUserDetail(row)">详情</el-button></template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+
+            <!-- 交易记录 -->
+            <el-tab-pane label="交易记录" name="bills">
+              <div class="card">
+                <div class="card-hd"><h2>充电交易记录</h2><el-button size="small" @click="loadBills">刷新</el-button></div>
+                <div v-if="!bills.length" class="empty-tip">暂无交易记录</div>
+                <table v-if="bills.length" class="data-table">
+                  <thead><tr>
+                    <th style="width:55px">账单#</th><th style="width:60px">用户</th><th style="width:45px">桩</th>
+                    <th style="width:85px">电量</th><th>开始时间</th><th>结束时间</th>
+                    <th class="col-r" style="width:80px">费用</th><th class="col-c" style="width:55px"></th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="b in bills" :key="b.id" @click="goToBillDetail(b)">
+                      <td>{{ b.id }}</td><td>{{ b.user_id }}</td><td>{{ b.pile_id }}</td>
+                      <td>{{ b.charge_energy }} kWh</td>
+                      <td>{{ fmt(b.start_time) }}</td><td>{{ fmt(b.stop_time) }}</td>
+                      <td class="fee col-r">¥{{ b.total_fee.toFixed(2) }}</td>
+                      <td class="col-c"><el-button type="primary" link size="small" @click.stop="goToBillDetail(b)">详单</el-button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </el-tab-pane>
+
+            <!-- 系统配置 -->
+            <el-tab-pane label="系统配置" name="config">
+              <div class="card">
+                <div class="card-hd"><h2>系统配置</h2><el-button size="small" @click="loadConfig">刷新</el-button></div>
+                <el-form label-position="top" class="cfg-form">
+                  <el-form-item label="等候区车位容量"><el-input-number v-model="cfg.waiting_area_size" :min="1" :max="100" style="width:100%" /></el-form-item>
+                  <el-form-item label="每个充电桩队列长度"><el-input-number v-model="cfg.charging_queue_len" :min="1" :max="20" style="width:100%" /></el-form-item>
+                  <el-button type="primary" @click="saveConfig">保存配置</el-button>
+                </el-form>
+                <el-descriptions :column="2" border style="max-width:660px">
+                  <el-descriptions-item label="快充桩数量">{{ cfg.fast_pile_count }}</el-descriptions-item>
+                  <el-descriptions-item label="慢充桩数量">{{ cfg.slow_pile_count }}</el-descriptions-item>
+                  <el-descriptions-item label="快充功率">{{ cfg.fast_power }} kWh/h</el-descriptions-item>
+                  <el-descriptions-item label="慢充功率">{{ cfg.slow_power }} kWh/h</el-descriptions-item>
+                  <el-descriptions-item label="服务费率">{{ cfg.service_fee_rate }} 元/kWh</el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </main>
+
+      <!-- ═══ 充电详单页 ═══ -->
+      <div v-if="currentPage === 'billDetail'" style="width:min(960px,calc(100%-36px));margin:14px auto">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <el-button @click="goBack" :icon="'ArrowLeft'" size="small">← 返回</el-button>
+          <h2 style="margin:0;font-size:18px">📋 充电详单 #{{ selectedBill.id }}</h2>
+        </div>
+        <div class="card" v-if="selectedBill">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="账单编号">{{ selectedBill.id }}</el-descriptions-item>
+            <el-descriptions-item label="充电桩ID">{{ selectedBill.pile_id }}</el-descriptions-item>
+            <el-descriptions-item label="用户ID">{{ selectedBill.user_id }}</el-descriptions-item>
+            <el-descriptions-item label="请求编号">{{ selectedBill.request_id }}</el-descriptions-item>
+            <el-descriptions-item label="开始时间" :span="2">{{ fmt(selectedBill.start_time) }}</el-descriptions-item>
+            <el-descriptions-item label="结束时间" :span="2">{{ fmt(selectedBill.stop_time) }}</el-descriptions-item>
+            <el-descriptions-item label="充电电量">{{ selectedBill.charge_energy }} kWh</el-descriptions-item>
+            <el-descriptions-item label="充电时长">{{ selectedBill.charge_duration.toFixed(2) }} h</el-descriptions-item>
+            <el-descriptions-item label="电费">{{ selectedBill.electricity_fee.toFixed(2) }} 元</el-descriptions-item>
+            <el-descriptions-item label="服务费">{{ selectedBill.service_fee.toFixed(2) }} 元</el-descriptions-item>
+            <el-descriptions-item label="总费用" :span="2">
+              <span style="font-weight:700;color:#43b02a;font-size:20px">¥{{ selectedBill.total_fee.toFixed(2) }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="生成时间" :span="2">{{ fmt(selectedBill.generated_at) }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
+      </div>
+
+      <!-- ═══ 用户详情页 ═══ -->
+      <div v-if="currentPage === 'userDetail'" style="width:min(960px,calc(100%-36px));margin:14px auto">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <el-button @click="goBack" size="small">← 返回</el-button>
+          <h2 style="margin:0;font-size:18px">👤 用户详情 — {{ selectedUser?.nickname || selectedUser?.username }}</h2>
+        </div>
+        <!-- 基本信息 -->
+        <div class="card" v-if="selectedUser" style="margin-bottom:14px">
+          <h3 style="margin:0 0 12px;font-size:15px">基本信息</h3>
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="用户ID">{{ selectedUser.id }}</el-descriptions-item>
+            <el-descriptions-item label="角色"><el-tag :type="selectedUser.role==='admin'?'danger':'success'" size="small">{{ selectedUser.role==='admin'?'管理员':'用户' }}</el-tag></el-descriptions-item>
+            <el-descriptions-item label="账号">{{ selectedUser.username }}</el-descriptions-item>
+            <el-descriptions-item label="昵称">{{ selectedUser.nickname || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="车牌号">{{ selectedUser.car_id || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="电池容量">{{ selectedUser.battery_capacity }} kWh</el-descriptions-item>
+            <el-descriptions-item label="注册时间">{{ fmt(selectedUser.created_at) }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
+        <!-- 充电记录 -->
+        <div class="card">
+          <h3 style="margin:0 0 12px;font-size:15px">充电记录 <span style="color:#6b7280;font-size:12px;font-weight:400">(共 {{ userBills.length }} 条)</span></h3>
+          <table class="data-table">
+            <thead><tr>
+              <th style="width:55px">账单#</th><th style="width:45px">桩</th>
+              <th style="width:90px">电量</th><th>开始时间</th><th>结束时间</th>
+              <th class="col-r" style="width:75px">费用</th><th class="col-c" style="width:55px"></th>
+            </tr></thead>
+            <tbody>
+              <tr v-if="!userBills.length" class="empty-row"><td colspan="7">暂无充电记录</td></tr>
+              <tr v-for="b in userBills" :key="b.id" @click="goToBillDetail(b)">
+                <td>{{ b.id }}</td><td>{{ b.pile_id }}</td>
+                <td>{{ b.charge_energy }} kWh</td>
+                <td>{{ fmt(b.start_time) }}</td><td>{{ fmt(b.stop_time) }}</td>
+                <td class="fee col-r">¥{{ b.total_fee.toFixed(2) }}</td>
+                <td class="col-c"><el-button type="primary" link size="small" @click.stop="goToBillDetail(b)">详单</el-button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.min.js"></script>
+  <script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+  <script>
+  (function() {
+    // JS 正在运行 → 隐藏红色测试条
+    var t = document.getElementById('test-js'); if (t) t.style.display = 'none';
+    var V = window.Vue;
+    var EP = window.ElementPlus;
+    if (!V) { document.body.innerHTML = '<div style="text-align:center;padding:40px"><h1 style="color:red">Vue.js 加载失败</h1><p>请检查网络连接后刷新页面</p></div>'; return; }
+    if (!EP) { document.body.innerHTML = '<div style="text-align:center;padding:40px"><h1 style="color:red">Element Plus 加载失败</h1><p>请检查网络连接后刷新页面</p></div>'; return; }
+
+    var createApp = V.createApp;
+    var ref = V.ref;
+    var reactive = V.reactive;
+    var computed = V.computed;
+    var nextTick = V.nextTick;
+    var onMounted = V.onMounted;
+    var onUnmounted = V.onUnmounted;
+    var ElMessage = EP.ElMessage;
+    var ElMessageBox = EP.ElMessageBox;
+
+    try {
+      createApp({
+        setup: function() {
+          var API = ref((typeof localStorage !== 'undefined' ? localStorage.getItem('chargego_api') : null) || 'http://127.0.0.1:8000');
+          var token = ref((typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('chargego_token') : null) || '');
+          var su = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('chargego_user') : null;
+          var user = ref(su ? JSON.parse(su) : null);
+          var progressTick = ref(Date.now());
+          var progressTimer = null;
+          var pollTimer = null;
+
+          // Auth
+          var authTab = ref('login');
+          var loginForm = reactive({ username: '', password: '' });
+          var regForm = reactive({ username: '', password: '', nickname: '', car_id: '', battery_capacity: 60 });
+
+          // User
+          var userTab = ref('req');
+          var chargeForm = reactive({ mode: 'fast', requested_energy: 20 });
+          var status = reactive({ active: false, request: null, lastRequest: null, front_count: 0, area: '' });
+          var bills = ref([]);
+          var billDialogVisible = ref(false);
+          var billDetail = ref(null);
+          // 内嵌路由
+          var currentPage = ref('main');  // 'main' | 'billDetail' | 'userDetail'
+          var selectedBill = ref(null);
+          var selectedUser = ref(null);
+          var userBills = ref([]);
+
+          function goToBillDetail(row) {
+            selectedBill.value = row;
+            currentPage.value = 'billDetail';
+          }
+          function goToUserDetail(row) {
+            selectedUser.value = row;
+            currentPage.value = 'userDetail';
+            // 已有数据直接筛选，否则先加载
+            var done = function() {
+              userBills.value = (bills.value||[]).filter(function(b) { return b.user_id === row.id; });
+            };
+            if (bills.value.length) { done(); } else { loadBills().then(done); }
+          }
+          function goBack() {
+            currentPage.value = 'main';
+            selectedBill.value = null;
+            selectedUser.value = null;
+          }
+
+          // Admin
+          var adminTab = ref('piles');
+          var reportPeriod = ref('day');
+          var faultStrategy = ref('sequence');
+          var piles = ref([]);
+          var pileConfigVisible = ref(false);
+          var pileConfigTarget = ref(null);
+          var pileConfigPower = ref(30);
+          var queues = ref([]);
+          var waitingArea = reactive({ waiting: [], fault_waiting: [] });
+          var reportRows = ref([]);
+          var users = ref([]);
+          var cfg = reactive({ fast_pile_count: 0, slow_pile_count: 0, waiting_area_size: 5, charging_queue_len: 2, fast_power: 30, slow_power: 10, service_fee_rate: 0.8 });
+
+          // HTTP
+          function hdrs() { var h = {}; if (token.value) h['Authorization'] = 'Bearer ' + token.value; return h; }
+          function api(path, opts) {
+            opts = opts || {};
+            return fetch(API.value + path, {
+              method: opts.method || 'GET',
+              headers: Object.assign({ 'Content-Type': 'application/json' }, hdrs(), opts.headers || {}),
+              body: opts.body
+            }).then(function(r) {
+              return r.text().then(function(t) {
+                var d = t ? JSON.parse(t) : null;
+                if (!r.ok) {
+                  var msg = d && d.detail;
+                  throw new Error(Array.isArray(msg) ? msg.map(function(m) {
+                    var text = m.msg || m.message || '';
+                    return text.replace(/^Value error,\s*/i, '');
+                  }).join('；') : (msg || '请求失败'));
+                }
+                return d;
+              });
+            });
+          }
+          function act(fn, ok) {
+            return fn().then(function(r) { if (ok) ElMessage.success(ok); return r; }).catch(function(e) { ElMessage.error(e.message || '操作失败'); return null; });
+          }
+          function save(d) {
+            token.value = d.token; user.value = d.user;
+            if (typeof sessionStorage !== 'undefined') {
+              sessionStorage.setItem('chargego_token', d.token);
+              sessionStorage.setItem('chargego_user', JSON.stringify(d.user));
+            }
+          }
+
+          // Auth ops
+          function doLogin() {
+            act(function() { return api('/api/login', { method: 'POST', body: JSON.stringify({username: loginForm.username, password: loginForm.password}) }); }, '登录成功').then(function(d) { if (d) { save(d); refreshAll(); } });
+          }
+          function doRegister() {
+            act(function() { return api('/api/register', { method: 'POST', body: JSON.stringify({username: regForm.username, password: regForm.password, nickname: regForm.nickname, car_id: regForm.car_id, battery_capacity: regForm.battery_capacity}) }); }, '注册成功').then(function(d) { if (d) { save(d); refreshAll(); } });
+          }
+          function doLogout() {
+            stopPolling();
+            token.value = ''; user.value = null;
+            if (typeof sessionStorage !== 'undefined') { sessionStorage.removeItem('chargego_token'); sessionStorage.removeItem('chargego_user'); }
+          }
+
+          // User ops
+          function submitCharge() {
+            status.lastRequest = null; // 清除上一次完成记录
+            act(function() { return api('/api/charge/submit', { method: 'POST', body: JSON.stringify({mode: chargeForm.mode, requested_energy: chargeForm.requested_energy}) }); }, '请求已提交').then(function(d) { if (d) { refreshUserTab(); startPolling(); } });
+          }
+          function modifyCharge() {
+            act(function() { return api('/api/charge/modify', { method: 'PUT', body: JSON.stringify({mode: chargeForm.mode, requested_energy: chargeForm.requested_energy}) }); }, '已修改').then(function(d) { if (d) refreshUserTab(); });
+          }
+          function cancelCharge() {
+            ElMessageBox.confirm('确定取消当前充电请求？', '取消请求', { type: 'warning' }).then(function() {
+              return act(function() { return api('/api/charge/cancel', { method: 'DELETE' }); }, '已取消');
+            }).then(function(d) { if (d) { stopPolling(); refreshUserTab(); } }).catch(function() {});
+          }
+          function doPause() {
+            act(function() { return api('/api/charge/pause', { method: 'POST' }); }, '已暂停').then(function(d) { if (d) refreshUserTab(); });
+          }
+          function doResume() {
+            act(function() { return api('/api/charge/resume', { method: 'POST' }); }, '已恢复').then(function(d) { if (d) { refreshUserTab(); startPolling(); } });
+          }
+          function pauseCharge() {
+            // 兼容旧调用：如果正在充电则暂停
+            if (status.request && status.request.status === 'charging') { doPause(); }
+          }
+          function finishCharge() {
+            act(function() { return api('/api/charge/finish', { method: 'POST', body: '{}' }); }, '充电已结束').then(function(d) { if (d) { stopPolling(); refreshUserTab(); } });
+          }
+          function loadStatus() {
+            return act(function() { return api('/api/charge/status'); }).then(function(d) {
+              if (!d) return;
+              // 保留上一次的请求信息（充电完成时后端返回null，但前端保留显示）
+              if (d.request) {
+                status.request = d.request;
+                status.lastRequest = null;
+              } else if (status.request && status.request.status === 'charging') {
+                // 充电刚完成：保留请求数据并标记完成
+                status.request.status = 'completed';
+                status.request.progress = status.request.progress || {};
+                status.request.progress.percent = 100;
+                status.lastRequest = status.request;
+              }
+              status.active = d.active; status.front_count = d.front_count; status.area = d.area;
+              if (d.request) { chargeForm.mode = d.request.mode; chargeForm.requested_energy = d.request.requested_energy; }
+              // 自动管理轮询：有活跃请求则轮询，否则停止
+              if (d.request && d.active && d.request.status !== 'completed' && d.request.status !== 'cancelled') {
+                if (!pollTimer) startPolling();
+              } else {
+                stopPolling();
+              }
+            });
+          }
+          function startPolling() {
+            stopPolling();
+            pollTimer = setInterval(function() { loadStatus(); }, 2000);
+          }
+          function stopPolling() {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          }
+          var progressBarWidth = computed(function() {
+            var r = status.request;
+            if (!r || !r.progress) return 0;
+            if (r.status === 'charging') return liveProgress(r).percent;
+            if (r.status === 'paused') return liveProgress(r).percent;
+            if (r.status === 'queued') return 8;
+            return 3;
+          });
+          function loadBills() { return act(function() { return api('/api/charge/bills'); }).then(function(d) { if (d) bills.value = d; }); }
+          function showBillDetail(row) { goToBillDetail(row); }
+          function refreshUserTab() { loadStatus(); loadBills(); }
+
+          // Admin ops
+          function loadPiles() { return act(function() { return api('/api/admin/piles/status'); }).then(function(d) { if (d) piles.value = d; }); }
+          function loadQueues() { return act(function() { return api('/api/admin/piles/queues'); }).then(function(d) { if (d) queues.value = d; }); }
+          function loadWaitingArea() {
+            return act(function() { return api('/api/admin/waiting-area'); }).then(function(d) {
+              if (d) { waitingArea.waiting = d.waiting || []; waitingArea.fault_waiting = d.fault_waiting || []; }
+            });
+          }
+          function startPile(p) {
+            act(function() { return api('/api/admin/pile/start', { method: 'POST', body: JSON.stringify({pile_id: p.id}) }); }, p.code + ' 已启动').then(function(d) { if (d) refreshAdminTab(); });
+          }
+          function stopPile(p) {
+            act(function() { return api('/api/admin/pile/stop', { method: 'POST', body: JSON.stringify({pile_id: p.id, strategy: faultStrategy.value}) }); }, p.code + ' 已关闭').then(function(d) { if (d) refreshAdminTab(); });
+          }
+          function openPileConfig(p) {
+            pileConfigTarget.value = p;
+            pileConfigPower.value = p.power;
+            pileConfigVisible.value = true;
+          }
+          function savePileConfig() {
+            act(function() {
+              return api('/api/admin/pile/configure', { method: 'PUT', body: JSON.stringify({pile_id: pileConfigTarget.value.id, power: pileConfigPower.value}) });
+            }, '参数已保存').then(function(d) { if (d) { pileConfigVisible.value = false; refreshAdminTab(); } });
+          }
+          function loadReports() {
+            return act(function() { return api('/api/admin/reports?period=' + reportPeriod.value); }).then(function(d) {
+              if (d) { reportRows.value = d.rows; nextTick().then(function() { renderChart(); }); }
+            });
+          }
+          function loadUsers() { return act(function() { return api('/api/admin/users'); }).then(function(d) { if (d) users.value = d; }); }
+          function loadConfig() { return act(function() { return api('/api/admin/config'); }).then(function(d) { if (d) Object.assign(cfg, d); }); }
+          function saveConfig() {
+            act(function() { return api('/api/admin/config', { method: 'PUT', body: JSON.stringify({waiting_area_size: cfg.waiting_area_size, charging_queue_len: cfg.charging_queue_len}) }); }, '配置已保存').then(function(d) { if (d) Object.assign(cfg, d); });
+          }
+          function refreshAdminTab() { loadPiles(); loadQueues(); loadWaitingArea(); loadReports(); loadUsers(); loadConfig(); loadBills(); }
+
+          var busy = false;
+          function refreshAll() {
+            if (!token.value || !user.value || busy) return;
+            busy = true;
+            try {
+              if (user.value.role === 'admin') refreshAdminTab(); else refreshUserTab();
+            } finally { busy = false; }
+          }
+
+          // Chart
+          function renderChart() {
+            var el = document.getElementById('reportChart');
+            if (!el || !window.echarts) return;
+            var chart = echarts.getInstanceByDom(el) || echarts.init(el);
+            chart.setOption({
+              tooltip: { trigger: 'axis' },
+              grid: { top: 32, left: 48, right: 20, bottom: 36 },
+              xAxis: { type: 'category', data: reportRows.value.map(function(r) { return r.pile_code; }) },
+              yAxis: { type: 'value' },
+              series: [
+                { name: '总费用', type: 'bar', data: reportRows.value.map(function(r) { return r.total_fee; }), itemStyle: { color: '#43b02a' } },
+                { name: '总电量', type: 'bar', data: reportRows.value.map(function(r) { return r.total_energy; }), itemStyle: { color: '#f59e0b' } }
+              ]
+            });
+            chart.resize();
+          }
+
+          // Progress
+          function liveProgress(r) {
+            if (!r || !r.progress) return { percent: 0, charged_energy: 0, remaining_minutes: 0, estimated_minutes: 0, power: null };
+            var p = r.progress;
+            // 暂停状态：进度冻结，直接使用后端数据
+            if (r.status === 'paused') {
+              return { percent: Math.round(p.percent || 0), charged_energy: p.charged_energy || 0,
+                       remaining_minutes: p.remaining_minutes || 0, estimated_minutes: p.estimated_minutes || 0,
+                       power: p.power, speed_multiplier: p.speed_multiplier };
+            }
+            if (r.status !== 'charging' || !r.start_time || !p.power) { p.percent = Math.round(p.percent || 0); return p; }
+            var start = new Date(r.start_time).getTime();
+            if (!isFinite(start)) return p;
+            var speed = p.speed_multiplier || 1;
+            var elapsed = Math.max((progressTick.value - start) / 3600000, 0) * speed;
+            var charged = Math.min(r.requested_energy, elapsed * p.power);
+            var est = r.requested_energy / p.power;
+            return {
+              percent: Math.round(Math.min(100, (charged / r.requested_energy) * 100)),
+              charged_energy: +charged.toFixed(2),
+              remaining_minutes: +(Math.max(est - elapsed, 0) * 60).toFixed(1),
+              estimated_minutes: +(est * 60).toFixed(1),
+              power: p.power,
+              speed_multiplier: speed
+            };
+          }
+          function progressColor(r) {
+            if (!r) return '#e5e7eb';
+            if (r.status === 'charging') return '#43b02a';
+            if (r.status === 'paused') return '#f59e0b';
+            if (r.status === 'completed') return '#43b02a';
+            return '#e5e7eb';
+          }
+          function progressSummary(r) {
+            if (!r || !r.progress) return '-';
+            var p = liveProgress(r);
+            if (r.status === 'waiting') return '等待叫号';
+            if (r.status === 'queued') return '等待启动';
+            if (r.status === 'charging') return '已充 ' + p.charged_energy + ' / ' + r.requested_energy + ' kWh，剩余约 ' + p.remaining_minutes + ' 分钟';
+            if (r.status === 'paused') return '⏸ 已暂停 · 已充 ' + p.charged_energy + ' / ' + r.requested_energy + ' kWh';
+            return p.percent + '%';
+          }
+
+          // Formatters
+          function statusText(s) {
+            var m = { waiting: '等候区排队', fault_waiting: '故障等待', queued: '充电区排队', charging: '充电中', paused: '已暂停', completed: '已完成', cancelled: '已取消' };
+            return m[s] || s || '-';
+          }
+          function tagType(s) {
+            var m = { waiting: 'warning', fault_waiting: 'danger', queued: 'primary', charging: 'success', paused: 'warning', completed: 'info', cancelled: 'danger' };
+            return m[s] || 'info';
+          }
+          function fmt(v) { return v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'; }
+
+          var canModify = computed(function() { return status.active && status.request && status.request.status === 'waiting'; });
+
+          // Timers
+          onMounted(function() {
+            progressTimer = setInterval(function() { progressTick.value = Date.now(); }, 1000);
+            var refreshTimer = setInterval(function() { refreshAll(); }, 5000);
+            refreshAll();
+            onUnmounted(function() { clearInterval(refreshTimer); });
+          });
+          onUnmounted(function() { if (progressTimer) clearInterval(progressTimer); if (pollTimer) clearInterval(pollTimer); });
+
+          return {
+            API: API, token: token, user: user,
+            authTab: authTab, loginForm: loginForm, regForm: regForm,
+            userTab: userTab, adminTab: adminTab, reportPeriod: reportPeriod, faultStrategy: faultStrategy,
+            chargeForm: chargeForm, status: status, bills: bills, billDialogVisible: billDialogVisible, billDetail: billDetail, currentPage: currentPage, selectedBill: selectedBill, selectedUser: selectedUser, userBills: userBills, goBack: goBack, goToBillDetail: goToBillDetail, goToUserDetail: goToUserDetail,
+            piles: piles, queues: queues, waitingArea: waitingArea, reportRows: reportRows, users: users, cfg: cfg,
+            doLogin: doLogin, doRegister: doRegister, doLogout: doLogout,
+            submitCharge: submitCharge, modifyCharge: modifyCharge, cancelCharge: cancelCharge, finishCharge: finishCharge, pauseCharge: pauseCharge, doPause: doPause, doResume: doResume, startPolling: startPolling, stopPolling: stopPolling,
+            loadBills: loadBills, showBillDetail: showBillDetail, refreshUserTab: refreshUserTab,
+            loadQueues: loadQueues, loadWaitingArea: loadWaitingArea, loadReports: loadReports,
+            loadUsers: loadUsers, loadConfig: loadConfig, saveConfig: saveConfig,
+            startPile: startPile, stopPile: stopPile, openPileConfig: openPileConfig, savePileConfig: savePileConfig, pileConfigVisible: pileConfigVisible, pileConfigTarget: pileConfigTarget, pileConfigPower: pileConfigPower, refreshAdminTab: refreshAdminTab,
+            liveProgress: liveProgress, progressSummary: progressSummary, progressColor: progressColor, progressBarWidth: progressBarWidth,
+            statusText: statusText, tagType: tagType, fmt: fmt, canModify: canModify
+          };
+        }
+      }).use(EP).mount('#app');
+    } catch (e) {
+      document.body.innerHTML = '<div style="text-align:center;padding:40px"><h1 style="color:red">初始化失败</h1><pre style="text-align:left;max-width:600px;margin:10px auto;font-size:12px;white-space:pre-wrap">' + e.message + '</pre></div>';
+    }
+  })();
+  </script>
+</body>
+</html>
