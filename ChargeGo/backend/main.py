@@ -31,6 +31,8 @@ FAST_POWER = 30.0        # 快充功率 (kWh/h)
 SLOW_POWER = 10.0        # 慢充功率 (kWh/h)
 SERVICE_FEE_RATE = 0.8   # 服务费率 (元/kWh)
 SPEED_MULTIPLIER = 20    # 时间加速倍率（演示用）
+PAUSE_TIMEOUT_MINUTES = 10  # 暂停超时（分钟）
+PAUSE_PENALTY = 5.0         # 暂停超时罚金（元）
 
 # ═══════════════════════════════════════════════════════════════
 # 数据库
@@ -62,6 +64,7 @@ class User(Base):
     nickname = Column(String(64), nullable=True)
     car_id = Column(String(32), nullable=True)  # 车牌号
     battery_capacity = Column(Float, nullable=False, default=60.0)
+    warning_count = Column(Integer, nullable=False, default=0)  # 警告次数
     created_at = Column(DateTime, nullable=False, default=datetime.now)
 
 class ChargingPile(Base):
@@ -87,6 +90,8 @@ class ChargeRequest(Base):
     start_time = Column(DateTime, nullable=True)
     finish_time = Column(DateTime, nullable=True)
     paused_energy = Column(Float, nullable=False, default=0.0)  # 暂停时已充电量
+    paused_at = Column(DateTime, nullable=True)               # 暂停开始时间
+    total_paused_minutes = Column(Float, nullable=False, default=0.0)  # 累计暂停分钟数
     created_at = Column(DateTime, nullable=False, default=datetime.now)
 
 class ChargeBill(Base):
@@ -103,6 +108,7 @@ class ChargeBill(Base):
     electricity_fee = Column(Float, nullable=False)
     service_fee = Column(Float, nullable=False)
     total_fee = Column(Float, nullable=False)
+    notes = Column(String(256), nullable=True)  # 备注（罚金等）
 
 # ═══════════════════════════════════════════════════════════════
 # Pydantic 请求体
@@ -252,6 +258,7 @@ def user_to_dict(user: User) -> dict:
         "id": user.id, "username": user.username, "role": user.role,
         "nickname": user.nickname, "car_id": user.car_id,
         "battery_capacity": user.battery_capacity,
+        "warning_count": user.warning_count,
         "created_at": user.created_at,
     }
 
@@ -262,6 +269,8 @@ def request_to_dict(r: ChargeRequest, progress: Optional[dict] = None) -> dict:
         "status": r.status, "queue_number": r.queue_number,
         "waiting_start_time": r.waiting_start_time, "assign_time": r.assign_time,
         "start_time": r.start_time, "finish_time": r.finish_time,
+        "paused_energy": r.paused_energy, "paused_at": r.paused_at,
+        "total_paused_minutes": r.total_paused_minutes,
         "created_at": r.created_at,
     }
     if progress is not None:
@@ -275,7 +284,7 @@ def bill_to_dict(b: ChargeBill) -> dict:
         "start_time": b.start_time, "stop_time": b.stop_time,
         "charge_energy": b.charge_energy, "charge_duration": b.charge_duration,
         "electricity_fee": b.electricity_fee, "service_fee": b.service_fee,
-        "total_fee": b.total_fee,
+        "total_fee": b.total_fee, "notes": b.notes,
     }
 
 def pile_to_dict(p: ChargingPile) -> dict:
@@ -317,6 +326,12 @@ def create_bill(db: Session, request: ChargeRequest, stop_time: datetime,
                 final_status: str = "completed") -> ChargeBill:
     """为充电请求生成账单，支持暂停后结算"""
     pile = db.query(ChargingPile).filter(ChargingPile.id == request.pile_id).first()
+    # 如果正在暂停中，先累加本次暂停时长
+    if request.status == "paused" and request.paused_at:
+        paused_secs = (datetime.now() - request.paused_at).total_seconds()
+        request.total_paused_minutes = (request.total_paused_minutes or 0.0) + round(paused_secs / 60, 1)
+        request.paused_at = None
+    paused_total = request.total_paused_minutes or 0.0
     if request.status == "paused":
         energy = request.paused_energy or 0.0
     elif elapsed_hours_override is not None:
@@ -337,6 +352,11 @@ def create_bill(db: Session, request: ChargeRequest, stop_time: datetime,
         total_fee=calc["total_fee"],
     )
     db.add(bill)
+    # 记录累计暂停时长到账单备注
+    if paused_total > 0:
+        bill.notes = (bill.notes or '') + f' | 累计暂停 {paused_total:.1f} 分钟'
+        bill.notes = bill.notes.strip(' | ')
+        db.add(bill)
     request.status = final_status
     request.finish_time = stop_time
     db.add(request)
@@ -349,10 +369,10 @@ def create_bill(db: Session, request: ChargeRequest, stop_time: datetime,
 ACTIVE_STATUSES = ("waiting", "fault_waiting", "queued", "charging", "paused")
 
 def pile_load(db: Session, pile: ChargingPile) -> int:
-    """计算某桩当前负载（充电中 + 排队）"""
+    """计算某桩当前负载（充电中 + 排队 + 暂停）"""
     return db.query(ChargeRequest).filter(
         ChargeRequest.pile_id == pile.id,
-        ChargeRequest.status.in_(("charging", "queued")),
+        ChargeRequest.status.in_(("charging", "queued", "paused")),
     ).count()
 
 def settle_completed_charges(db: Session) -> None:
@@ -397,20 +417,51 @@ def advance_active_queues(db: Session) -> None:
         if not pile.is_working:
             continue
         charging = db.query(ChargeRequest).filter(
-            ChargeRequest.pile_id == pile.id, ChargeRequest.status == "charging"
+            ChargeRequest.pile_id == pile.id, ChargeRequest.status.in_(("charging", "paused"))
         ).first()
         if not charging:
             start_next_vehicle(db, pile)
 
+def enforce_pause_timeout(db: Session) -> None:
+    """检查暂停超时的车辆，强制结束并加罚金"""
+    now = datetime.now()
+    timeout = timedelta(minutes=PAUSE_TIMEOUT_MINUTES)
+    paused_requests = db.query(ChargeRequest).filter(
+        ChargeRequest.status == "paused",
+        ChargeRequest.paused_at.isnot(None),
+    ).all()
+    for req in paused_requests:
+        elapsed = now - req.paused_at
+        if elapsed >= timeout:
+            # 累加本次暂停时长
+            paused_secs = (now - req.paused_at).total_seconds()
+            req.total_paused_minutes = (req.total_paused_minutes or 0.0) + round(paused_secs / 60, 1)
+            req.paused_at = None
+            # 生成账单，加罚金
+            user = db.query(User).filter(User.id == req.user_id).first()
+            user.warning_count = (user.warning_count or 0) + 1
+            db.add(user)
+            bill = create_bill(db, req, now, final_status="completed")
+            bill.total_fee = round(bill.total_fee + PAUSE_PENALTY, 2)
+            penalty_note = f"⏰ 暂停超时罚金 ¥{PAUSE_PENALTY}（暂停超过{PAUSE_TIMEOUT_MINUTES}分钟，系统强制结束）"
+            if bill.notes:
+                bill.notes = bill.notes + ' | ' + penalty_note
+            else:
+                bill.notes = penalty_note
+            db.add(bill)
+    if paused_requests:
+        db.commit()
+
 def run_scheduler(db: Session) -> None:
     """主调度器：把等候区车辆分配到充电桩 + 推进队列"""
     settle_completed_charges(db)
+    enforce_pause_timeout(db)
 
     # 推进已有队列
     for pile in db.query(ChargingPile).all():
         if pile.is_working:
             charging = db.query(ChargeRequest).filter(
-                ChargeRequest.pile_id == pile.id, ChargeRequest.status == "charging"
+                ChargeRequest.pile_id == pile.id, ChargeRequest.status.in_(("charging", "paused"))
             ).first()
             if not charging:
                 start_next_vehicle(db, pile)
@@ -695,6 +746,7 @@ def charge_pause(user: User = Depends(get_current_user), db: Session = Depends(g
     elapsed = scaled_elapsed_hours(req.start_time)
     req.paused_energy = min(req.requested_energy, elapsed * (pile.power if pile else 0))
     req.status = "paused"
+    req.paused_at = datetime.now()
     req.start_time = None
     db.add(req)
     db.commit()
@@ -708,8 +760,13 @@ def charge_resume(user: User = Depends(get_current_user), db: Session = Depends(
         raise HTTPException(status_code=404, detail="没有可恢复的充电请求")
     if req.status != "paused":
         raise HTTPException(status_code=400, detail="只有暂停状态才能恢复")
+    # 累加本次暂停时长
+    if req.paused_at:
+        paused_secs = (datetime.now() - req.paused_at).total_seconds()
+        req.total_paused_minutes = (req.total_paused_minutes or 0.0) + round(paused_secs / 60, 1)
     req.status = "charging"
     req.start_time = datetime.now()
+    req.paused_at = None
     db.add(req)
     db.commit()
     run_scheduler(db)
@@ -801,7 +858,7 @@ def admin_piles_status(admin: User = Depends(require_admin), db: Session = Depen
         data = pile_to_dict(pile)
         bills = db.query(ChargeBill).filter(ChargeBill.pile_id == pile.id).all()
         current = db.query(ChargeRequest).filter(
-            ChargeRequest.pile_id == pile.id, ChargeRequest.status == "charging"
+            ChargeRequest.pile_id == pile.id, ChargeRequest.status.in_(("charging", "paused"))
         ).first()
         queued = db.query(ChargeRequest).filter(
             ChargeRequest.pile_id == pile.id, ChargeRequest.status == "queued"
@@ -834,7 +891,7 @@ def admin_piles_queues(admin: User = Depends(require_admin), db: Session = Depen
     result = []
     for pile in db.query(ChargingPile).order_by(ChargingPile.id.asc()).all():
         current = db.query(ChargeRequest).filter(
-            ChargeRequest.pile_id == pile.id, ChargeRequest.status == "charging"
+            ChargeRequest.pile_id == pile.id, ChargeRequest.status.in_(("charging", "paused"))
         ).first()
         queued = db.query(ChargeRequest).filter(
             ChargeRequest.pile_id == pile.id, ChargeRequest.status == "queued"
