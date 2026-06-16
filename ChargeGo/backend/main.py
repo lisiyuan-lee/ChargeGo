@@ -23,14 +23,14 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 # ═══════════════════════════════════════════════════════════════
 
 DATABASE_URL = "sqlite:///chargego.db"
-FAST_PILE_COUNT = 3      # 快充桩数量
-SLOW_PILE_COUNT = 2      # 慢充桩数量
-WAITING_AREA_SIZE = 5    # 等候区容量
-CHARGING_QUEUE_LEN = 2   # 每桩队列长度
+FAST_PILE_COUNT = 2      # 快充桩数量（测试要求2）
+SLOW_PILE_COUNT = 3      # 慢充桩数量（测试要求3）
+WAITING_AREA_SIZE = 10   # 等候区容量（测试要求10）
+CHARGING_QUEUE_LEN = 3   # 每桩队列长度（测试要求3）
 FAST_POWER = 30.0        # 快充功率 (kWh/h)
 SLOW_POWER = 10.0        # 慢充功率 (kWh/h)
 SERVICE_FEE_RATE = 0.8   # 服务费率 (元/kWh)
-SPEED_MULTIPLIER = 20    # 时间加速倍率（演示用）
+SPEED_MULTIPLIER = 60    # 时间加速倍率（5秒=5分钟，匹配测试节奏）
 PAUSE_TIMEOUT_MINUTES = 10  # 暂停超时（分钟）
 PAUSE_PENALTY = 5.0         # 暂停超时罚金（元）
 
